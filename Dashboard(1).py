@@ -733,7 +733,7 @@ def display_visualization(tab, label, data, x_col, y_col, visual_type, color_ove
         
         st.plotly_chart(fig, use_container_width=True, config=config)
         
-        with st.expander("📊 View Data Table"):
+        with st.expander("📋 Filtered Table View"):
             st.dataframe(data, use_container_width=True)
         
         optimize_memory()
@@ -1346,7 +1346,7 @@ if uploaded_file:
                         chart_data_for_ppt = chart_data_agg.drop(columns=['MonthOnly', 'SortKey'])
                         x_col_for_ppt = "Month"
             
-                    with st.expander("📊 View Data Table"):
+                    with st.expander("📋 Filtered Table View"):
                         st.dataframe(chart_data_for_ppt, use_container_width=True)
 
                     ppt_bytes = create_ppt_with_chart(
@@ -1541,7 +1541,7 @@ if uploaded_file:
                     
                     st.plotly_chart(fig, use_container_width=True, config=config)
                     
-                    with st.expander("📊 View Data Table"):
+                    with st.expander("📋 Filtered Table View"):
                         st.dataframe(chart_data, use_container_width=True)
                     
                     ppt_type = 'bar' if visual_type == "Bar Chart" else 'line' if visual_type == "Line Chart" else 'pie'

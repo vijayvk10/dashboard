@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import PptxGenJS from "pptxgenjs";
 import Plot from "react-plotly.js";
 import * as XLSX from "xlsx";
 import "./App.css";
@@ -37,6 +38,92 @@ function extractMonthYear(col) {
 }
 
 function App() {
+  // --- Master PPT Generation ---
+  // Helper to collect all chart data for master PPT
+  function getAllTabChartData() {
+    const tabLabels = [
+      "Budget vs Actual", "Budget", "LY", "Act", "Gr", "Ach",
+      "YTD Budget", "YTD LY", "YTD Act", "YTD Gr", "YTD Ach",
+      "Branch Performance", "Branch Monthwise",
+      "Product Performance", "Product Monthwise"
+    ];
+    return tabLabels.map(tab => ({
+      label: tab,
+      chart: getTabChartData(tab, dataTable, columns, filters, visualType)
+    }));
+  }
+
+  // Handler to generate and download master PPT
+  async function handleGenerateMasterPPT() {
+    const pptx = new PptxGenJS();
+    const allCharts = getAllTabChartData();
+
+    allCharts.forEach(({ label, chart }) => {
+      if (chart.data && chart.data.length > 0) {
+        const slide = pptx.addSlide();
+        slide.addText(label, { x: 0.5, y: 0.2, fontSize: 18, bold: true });
+        // Only add chart if it's a bar/line/pie
+        const chartType = chart.data[0]?.type;
+        if (["bar", "scatter", "pie"].includes(chartType)) {
+          // For scatter, treat as line chart
+          let pptxType = chartType === "scatter" ? pptx.ChartType.line : chartType;
+          // Prepare chart data for pptxgenjs
+          let pptxData = [];
+          if (chartType === "pie") {
+            pptxData = [{
+              name: label,
+              labels: chart.data[0].labels,
+              values: chart.data[0].values
+            }];
+          } else if (chartType === "bar" || chartType === "scatter") {
+            // Support grouped bar/line
+            if (Array.isArray(chart.data)) {
+              pptxData = chart.data.map(d => ({
+                name: d.name || label,
+                labels: d.x,
+                values: d.y
+              }));
+            }
+          }
+          slide.addChart(pptxType, pptxData, { x: 0.5, y: 1, w: 8, h: 4 });
+        }
+      }
+    });
+
+    await pptx.writeFile({ fileName: "charts_only_master.pptx" });
+  }
+
+  // Handler to generate and download a single PPT for the active tab
+  async function handleDownloadTabPPT() {
+    const pptx = new PptxGenJS();
+    const chart = getTabChartData(activeTab, dataTable, columns, filters, visualType);
+    if (chart.data && chart.data.length > 0) {
+      const slide = pptx.addSlide();
+      slide.addText(activeTab, { x: 0.5, y: 0.2, fontSize: 18, bold: true });
+      const chartType = chart.data[0]?.type;
+      if (["bar", "scatter", "pie"].includes(chartType)) {
+        let pptxType = chartType === "scatter" ? pptx.ChartType.line : chartType;
+        let pptxData = [];
+        if (chartType === "pie") {
+          pptxData = [{
+            name: activeTab,
+            labels: chart.data[0].labels,
+            values: chart.data[0].values
+          }];
+        } else if (chartType === "bar" || chartType === "scatter") {
+          if (Array.isArray(chart.data)) {
+            pptxData = chart.data.map(d => ({
+              name: d.name || activeTab,
+              labels: d.x,
+              values: d.y
+            }));
+          }
+        }
+        slide.addChart(pptxType, pptxData, { x: 0.5, y: 1, w: 8, h: 4 });
+      }
+      await pptx.writeFile({ fileName: `${activeTab.replace(/\s+/g, "_").toLowerCase()}_chart.pptx` });
+    }
+  }
   // State
   const [excelFile, setExcelFile] = useState(null);
   const [sheetNames, setSheetNames] = useState([]);
@@ -373,10 +460,10 @@ function App() {
 
   // Add tab names as in the Python dashboard
   const tabNames = [
-    "Budget vs Actual", "Budget", "LY", "Act", "Gr", "Ach",
-    "YTD Budget", "YTD LY", "YTD Act", "YTD Gr", "YTD Ach",
-    "Branch Performance", "Branch Monthwise",
-    "Product Performance", "Product Monthwise"
+    "📊 Budget vs Actual", "📊 Budget", "📊 LY", "📊 Act", "📊 Gr", "📊 Ach",
+    "📈 YTD Budget", "📈 YTD LY", "📈 YTD Act", "📈 YTD Gr", "📈 YTD Ach",
+    "🌍 Branch Performance", "🌍 Branch Monthwise",
+    "📦 Product Performance", "📦 Product Monthwise"
   ];
   const [activeTab, setActiveTab] = useState(tabNames[0]);
 
@@ -384,9 +471,14 @@ function App() {
   const [showBvATable, setShowBvATable] = useState(false);
 
   // --- Chart Data Generation for each tab ---
+  // Helper to strip emoji and whitespace from tab label (safe for JS regex)
+  function stripEmoji(label) {
+    // Remove leading emoji and whitespace
+    return label.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+  }
   function getTabChartData(tabLabel, tableData, cols, appliedFilters, visType) {
-    // Helper for extracting month columns
-    const getMonthCols = () => cols.filter((col) => extractMonthYear(col));
+    // Always strip emoji for logic
+    const cleanTabLabel = stripEmoji(tabLabel);
     // Helper for melting data
     const melt = (data, idVar, valueVars, varName, valueName) => {
       let out = [];
@@ -403,7 +495,7 @@ function App() {
     };
 
     // Budget vs Actual
-    if (tabLabel === "Budget vs Actual") {
+    if (cleanTabLabel === "Budget vs Actual") {
       const budgetCols = cols.filter(col => /^budget(?!.*ytd)/i.test(col));
       const actCols = cols.filter(col => /^act(?!.*ytd)/i.test(col));
       if (budgetCols.length && actCols.length) {
@@ -485,8 +577,8 @@ function App() {
     }
 
     // Budget, LY, Act, Gr, Ach (monthly)
-    if (["Budget", "LY", "Act", "Gr", "Ach"].includes(tabLabel)) {
-      const label = tabLabel;
+    if (["Budget", "LY", "Act", "Gr", "Ach"].includes(cleanTabLabel)) {
+      const label = cleanTabLabel;
       const valueCols = cols.filter(col =>
         new RegExp(`^${label}(?!.*ytd)`, "i").test(col)
       );
@@ -543,8 +635,8 @@ function App() {
     }
 
     // YTD Budget, YTD LY, YTD Act, YTD Gr, YTD Ach
-    if (tabLabel.startsWith("YTD")) {
-      const label = tabLabel.replace("YTD ", "");
+    if (cleanTabLabel.startsWith("YTD")) {
+      const label = cleanTabLabel.replace("YTD ", "");
       const ytdCols = cols.filter(col =>
         new RegExp(`ytd.*${label}|${label}.*ytd`, "i").test(col)
       );
@@ -598,7 +690,7 @@ function App() {
     }
 
     // Branch Performance
-    if (tabLabel === "Branch Performance") {
+    if (cleanTabLabel === "Branch Performance") {
       const ytdActCol = cols.find(col => /ytd.*act|act.*ytd/i.test(col));
       if (ytdActCol) {
         let filtered = tableData.filter(row => row[cols[0]] && row[ytdActCol]);
@@ -649,7 +741,7 @@ function App() {
     }
 
     // Branch Monthwise
-    if (tabLabel === "Branch Monthwise") {
+    if (cleanTabLabel === "Branch Monthwise") {
       const actCols = cols.filter(col => /^act(?!.*ytd)/i.test(col));
       if (actCols.length) {
         let melted = melt(tableData, cols[0], actCols, "Month", "Value");
@@ -701,7 +793,7 @@ function App() {
     }
 
     // Product Performance
-    if (tabLabel === "Product Performance") {
+    if (cleanTabLabel === "Product Performance") {
       const ytdActCol = cols.find(col => /ytd.*act|act.*ytd/i.test(col));
       if (ytdActCol) {
         let filtered = tableData.filter(row => row[cols[0]] && row[ytdActCol]);
@@ -752,7 +844,7 @@ function App() {
     }
 
     // Product Monthwise
-    if (tabLabel === "Product Monthwise") {
+    if (cleanTabLabel === "Product Monthwise") {
       const actCols = cols.filter(col => /^act(?!.*ytd)/i.test(col));
       if (actCols.length) {
         let melted = melt(tableData, cols[0], actCols, "Month", "Value");
@@ -830,7 +922,7 @@ function App() {
             Dashboard
           </h2>
           <div className="mb-6">
-            <label className="block text-lg font-bold mb-2">Upload Excel File</label>
+            <label className="block text-base font-medium mb-2">Upload Excel File</label>
             <div className="w-full bg-white border-2 border-dashed border-blue-400 rounded-lg p-4 flex flex-col items-center justify-center shadow-sm hover:border-blue-600 transition-all" style={{ minHeight: '110px' }}>
               <input
                 type="file"
@@ -845,7 +937,7 @@ function App() {
           </div>
           {sheetNames.length > 0 && (
             <div className="mb-4">
-              <label className="block text-lg font-bold mb-2">Sheet</label>
+              <label className="block text-sm font-normal mb-2">📄 Select a Sheet</label>
               <div className="relative w-full">
                 <select
                   value={selectedSheet}
@@ -853,7 +945,7 @@ function App() {
                   className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
                   style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
                 >
-                  <option value="">Select Sheet</option>
+                  <option value="">📄 Select a Sheet</option>
                   {sheetNames.map((s) => (
                     <option key={s} value={s}>
                       {s}
@@ -874,7 +966,7 @@ function App() {
           )}
           {tableOptions.length > 0 && (
             <div className="mb-4">
-              <label className="block text-lg font-bold mb-2">Table</label>
+              <label className="block text-sm font-normal mb-2">📌 Select Table</label>
               <div className="flex flex-col gap-2">
                 {tableOptions.map((t) => {
                   let firstCol = t;
@@ -886,7 +978,7 @@ function App() {
                     }
                   }
                   return (
-                    <label key={t} className="flex items-center gap-2 cursor-pointer text-base font-semibold">
+                    <label key={t} className="flex items-center gap-2 cursor-pointer text-sm font-normal">
                       <input
                         type="radio"
                         name="table"
@@ -905,7 +997,7 @@ function App() {
           )}
           {selectedTable && (
             <div className="mb-4 space-y-3">
-              <label className="block text-lg font-bold">Month</label>
+              <label className="block text-sm font-normal">📅 Filter by Month</label>
               <div className="relative w-full">
                 <select
                   name="month"
@@ -930,7 +1022,7 @@ function App() {
                   }
                 `}</style>
               </div>
-              <label className="block text-lg font-bold">Year</label>
+              <label className="block text-sm font-normal">📆 Filter by Year</label>
               <div className="relative w-full">
                 <select
                   name="year"
@@ -957,7 +1049,7 @@ function App() {
               </div>
               {filterOptions.branches.length > 1 && (
                 <>
-                  <label className="block text-lg font-bold">Branch</label>
+                  <label className="block text-sm font-normal">🌍 Filter by Branch</label>
                   <div className="relative w-full">
                     <select
                       name="branch"
@@ -986,7 +1078,7 @@ function App() {
               )}
               {filterOptions.products.length > 1 && (
                 <>
-                  <label className="block text-lg font-bold">Product</label>
+                  <label className="block text-sm font-normal">📦 Filter by Product</label>
                   <div className="relative w-full">
                     <select
                       name="product"
@@ -1014,7 +1106,10 @@ function App() {
                 </>
               )}
               <hr className="my-3 border-blue-200" />
-              <label className="block text-lg font-bold mt-2">Visualization</label>
+              <label className="block text-sm font-normal mt-2">📊 Visualization Options</label>
+              <div style={{ height: 12 }}></div>
+              <label className="block text-xs font-medium mb-1 text-white">Select Visualization Type</label>
+              <div style={{ marginBottom: '0.75rem' }}></div>
               <div className="relative w-full">
                 <select
                   value={visualType}
@@ -1035,6 +1130,22 @@ function App() {
                     overflow-y: auto;
                   }
                 `}</style>
+              </div>
+              {/* Master PPT Download Section */}
+              <div className="mt-6 border-t border-blue-200 pt-4">
+                <div className="font-medium text-base mb-2 flex items-center gap-2">
+                  <span role="img" aria-label="ppt">📊</span> Download All Visuals
+                </div>
+                <button
+                  onClick={handleGenerateMasterPPT}
+                  className="w-full px-4 py-2 bg-orange-600 text-white rounded font-semibold hover:bg-orange-700 transition-all"
+                  style={{ marginBottom: 8 }}
+                >
+                  🔄 Generate Master PPT (Charts Only)
+                </button>
+                <div className="text-xs text-white/80 mt-1">
+                  All PPT downloads contain ONLY clean charts (no tables, straight x-axis labels)
+                </div>
               </div>
             </div>
           )}
@@ -1061,7 +1172,7 @@ function App() {
                 {/* Only Data Table for 'sales analysis' sheet */}
                 {selectedSheet.toLowerCase().includes("sales analysis") ? (
                   <div className="mb-8">
-                    <h3 className="text-lg font-semibold mb-2">Data Table</h3>
+                    <h3 className="text-lg font-semibold mb-2">📋 Filtered Table View</h3>
                     <div className="overflow-x-auto rounded border border-gray-200 bg-gray-50" style={{ maxHeight: "400px", minHeight: "200px", overflowY: "auto", height: "400px" }}>
                       <table className="min-w-full text-sm text-gray-800">
                         <thead className="bg-blue-100 sticky top-0 z-10">
@@ -1098,7 +1209,7 @@ function App() {
                 ) : (
                   <>
                     <div className="mb-8">
-                      <h3 className="text-lg font-semibold mb-2">Data Table</h3>
+                      <h3 className="text-lg font-semibold mb-2">📋 Filtered Table View</h3>
                     <div>
                       <div
                         className="overflow-x-auto rounded border border-gray-200 bg-gray-50"
@@ -1152,12 +1263,12 @@ function App() {
                           {tabNames.map((tab) => (
                             <button
                               key={tab}
-                              className={`px-6 py-3 rounded-lg text-lg ${activeTab === tab ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} font-bold shadow-sm transition-all duration-150`}
+                              className={`px-4 py-2 rounded-md text-base ${activeTab === tab ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} font-medium shadow-sm transition-all duration-150`}
                               onClick={() => {
                                 setActiveTab(tab);
                                 setShowBvATable(false);
                               }}
-                              style={{ whiteSpace: 'nowrap', minWidth: '160px' }}
+                              style={{ whiteSpace: 'nowrap', minWidth: '110px' }}
                             >
                               {tab}
                             </button>
@@ -1191,68 +1302,185 @@ function App() {
                         />
                       </div>
                       {/* Data Table for all tabs */}
-                      <div className="mt-4">
+                      <div className="mt-4 flex flex-wrap gap-2 items-center">
                         <button
                           className="px-4 py-2 rounded bg-gray-200 text-gray-800 font-semibold hover:bg-blue-100"
                           onClick={() => setShowBvATable((v) => !v)}
                         >
                           {showBvATable ? "Hide" : "📊 View Data Table"}
                         </button>
-                        {showBvATable && (
-                          <>
-                          <div className="mt-2">
-                            <div className="overflow-x-auto border rounded bg-gray-50" style={{ maxHeight: "300px", minHeight: "120px", overflowY: "auto", height: "300px" }}>
-                              <table className="min-w-full text-sm text-gray-800">
-                                <thead className="bg-blue-100 sticky top-0 z-10">
-                                  <tr>
-                                    {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
-                                      getTabChartData(activeTab, dataTable, columns, filters, visualType).table.length > 0 &&
-                                      Object.keys(getTabChartData(activeTab, dataTable, columns, filters, visualType).table[0]).map((col) => (
-                                        <th key={col} className="px-3 py-2 font-semibold text-left">{col}</th>
-                                      ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
-                                    getTabChartData(activeTab, dataTable, columns, filters, visualType).table.map(
-                                      (row, idx) => (
-                                        <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                                          {Object.keys(row).map((col) => (
-                                            <td key={col} className="px-3 py-2">
-                                              {typeof row[col] === "number" && !Number.isInteger(row[col])
-                                                ? row[col].toFixed(2)
-                                                : row[col]}
-                                            </td>
-                                          ))}
-                                        </tr>
-                                      )
-                                    )}
-                                </tbody>
-                              </table>
-                            </div>
-                            <button
-                              onClick={() => {
-                                // Download the currently shown tab table as CSV
-                                const tabTable = getTabChartData(activeTab, dataTable, columns, filters, visualType).table;
-                                if (tabTable && tabTable.length > 0) {
-                                  const tabCols = Object.keys(tabTable[0]);
-                                  const csv = arrayToCSV(tabTable, tabCols);
-                                  downloadCSV(csv, `${activeTab.replace(/\s+/g, "_").toLowerCase()}_table.csv`);
-                                }
-                              }}
-                              className="mt-3 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
-                              style={{ width: "auto", minWidth: "0" }}
-                              disabled={
-                                !getTabChartData(activeTab, dataTable, columns, filters, visualType).table ||
-                                getTabChartData(activeTab, dataTable, columns, filters, visualType).table.length === 0
-                              }
-                            >
-                              ⬇️ Download CSV
-                            </button>
-                          </div>
-                          </>
-                        )}
                       </div>
+                      {showBvATable && (
+                        <div className="mt-2">
+                          <div className="overflow-x-auto border rounded bg-gray-50" style={{ maxHeight: "300px", minHeight: "120px", overflowY: "auto", height: "300px" }}>
+                            <table className="min-w-full text-sm text-gray-800">
+                              <thead className="bg-blue-100 sticky top-0 z-10">
+                                <tr>
+                                  {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
+                                    getTabChartData(activeTab, dataTable, columns, filters, visualType).table.length > 0 &&
+                                    Object.keys(getTabChartData(activeTab, dataTable, columns, filters, visualType).table[0]).map((col) => (
+                                      <th key={col} className="px-3 py-2 font-semibold text-left">{col}</th>
+                                    ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
+                                  getTabChartData(activeTab, dataTable, columns, filters, visualType).table.map(
+                                    (row, idx) => (
+                                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
+                                        {Object.keys(row).map((col) => (
+                                          <td key={col} className="px-3 py-2">
+                                            {typeof row[col] === "number" && !Number.isInteger(row[col])
+                                              ? row[col].toFixed(2)
+                                              : row[col]}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    )
+                                  )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                      {/* Download buttons below the table, with space */}
+                      <div className="mt-6 flex flex-col gap-3 items-start">
+                        <button
+                          onClick={handleDownloadTabPPT}
+                          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold shadow"
+                          style={{ width: "auto", minWidth: "0" }}
+                          disabled={
+                            !getTabChartData(activeTab, dataTable, columns, filters, visualType).data ||
+                            getTabChartData(activeTab, dataTable, columns, filters, visualType).data.length === 0
+                          }
+                        >
+                          ⬇️ Download {activeTab} PPT
+                        </button>
+                      </div>
+                      {/* Metrics for Branch/Product Performance - now truly below the data table */}
+                      <div style={{ marginTop: 32 }}></div>
+                      {(activeTab === "Branch Performance" || activeTab === "Product Performance") && (() => {
+                        const tabData = getTabChartData(activeTab, dataTable, columns, filters, visualType).table || [];
+                        if (!tabData.length) return null;
+                        // Use correct key for name
+                        const nameKey = activeTab === "Branch Performance" ? "Branch" : "Product";
+                        const perfKey = "Performance";
+                        // Sort descending for top, ascending for bottom
+                        const sorted = [...tabData].sort((a, b) => (b[perfKey] || 0) - (a[perfKey] || 0));
+                        const topPerformer = sorted[0];
+                        const totalPerformance = tabData.reduce((sum, r) => sum + (Number(r[perfKey]) || 0), 0);
+                        const avgPerformance = tabData.length ? totalPerformance / tabData.length : 0;
+                        const top5 = sorted.slice(0, 5);
+                        const bottom5 = [...sorted].reverse().slice(0, 5);
+                        return (
+                          <div className="mb-6 flex flex-col items-center justify-center">
+                            <div className="flex flex-wrap gap-6 mb-6 justify-center">
+                              <div className="bg-green-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-green-800 text-xl mb-1">Top Performer</div>
+                                <div className="text-xl font-bold mb-1">{topPerformer?.[nameKey]}</div>
+                                <div className="text-green-700 text-lg">{topPerformer?.[perfKey]?.toLocaleString()}</div>
+                              </div>
+                              <div className="bg-blue-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-blue-800 text-xl mb-1">Total Performance</div>
+                                <div className="text-xl font-bold text-blue-700 mb-1">{totalPerformance.toLocaleString()}</div>
+                              </div>
+                              <div className="bg-yellow-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-yellow-800 text-xl mb-1">Average Performance</div>
+                                <div className="text-xl font-bold text-yellow-700 mb-1">{avgPerformance.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-6 justify-center w-full">
+                              <div className="flex-1 min-w-[260px] max-w-[340px] mx-auto">
+                                <div className="font-semibold text-lg text-center mb-2">🏆 Top 5 {activeTab === "Branch Performance" ? "Regions" : "Products"}</div>
+                                <table className="min-w-full text-base text-gray-800 border rounded-xl bg-white mx-auto">
+                                  <thead className="bg-blue-50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-center">{nameKey}</th>
+                                      <th className="px-3 py-2 text-center">{perfKey}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {top5.map((row, idx) => (
+                                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                        <td className="px-3 py-2 text-center font-semibold">{row[nameKey]}</td>
+                                        <td className="px-3 py-2 text-center">{row[perfKey]?.toLocaleString()}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="flex-1 min-w-[260px] max-w-[340px] mx-auto">
+                                <div className="font-semibold text-lg text-center mb-2">📉 Bottom 5 {activeTab === "Branch Performance" ? "Regions" : "Products"}</div>
+                                <table className="min-w-full text-base text-gray-800 border rounded-xl bg-white mx-auto">
+                                  <thead className="bg-blue-50">
+                                    <tr>
+                                      <th className="px-3 py-2 text-center">{nameKey}</th>
+                                      <th className="px-3 py-2 text-center">{perfKey}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {bottom5.map((row, idx) => (
+                                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                        <td className="px-3 py-2 text-center font-semibold">{row[nameKey]}</td>
+                                        <td className="px-3 py-2 text-center">{row[perfKey]?.toLocaleString()}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Metrics for Branch/Product Monthwise */}
+                      {(activeTab === "Branch Monthwise" || activeTab === "Product Monthwise") && (() => {
+                        // Get the tab data (should be in long format: {Branch/Product, Month, Value})
+                        const tabData = getTabChartData(activeTab, dataTable, columns, filters, visualType).table || [];
+                        if (!tabData.length) return null;
+                        // Group by month, sum values
+                        const monthTotals = {};
+                        tabData.forEach(row => {
+                          const month = row["Month"];
+                          const value = Number(row["Value"]) || 0;
+                          if (!monthTotals[month]) monthTotals[month] = 0;
+                          monthTotals[month] += value;
+                        });
+                        const months = Object.keys(monthTotals);
+                        if (!months.length) return null;
+                        // Best Month
+                        let bestMonth = months[0];
+                        let bestMonthValue = monthTotals[bestMonth];
+                        months.forEach(m => {
+                          if (monthTotals[m] > bestMonthValue) {
+                            bestMonth = m;
+                            bestMonthValue = monthTotals[m];
+                          }
+                        });
+                        // Monthly Average
+                        const monthlyAvg = months.length ? (Object.values(monthTotals).reduce((a, b) => a + b, 0) / months.length) : 0;
+                        // Total Performance
+                        const totalPerformance = Object.values(monthTotals).reduce((a, b) => a + b, 0);
+                        return (
+                          <div className="mb-6 flex flex-col items-center justify-center">
+                            <div className="flex flex-wrap gap-6 mb-6 justify-center">
+                              <div className="bg-green-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-green-800 text-xl mb-1">Best Month</div>
+                                <div className="text-xl font-bold mb-1">{bestMonth}</div>
+                                <div className="text-green-700 text-lg">{bestMonthValue.toLocaleString()}</div>
+                              </div>
+                              <div className="bg-yellow-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-yellow-800 text-xl mb-1">Monthly Average</div>
+                                <div className="text-xl font-bold text-yellow-700 mb-1">{monthlyAvg.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                              </div>
+                              <div className="bg-blue-100 rounded-xl p-4 min-w-[180px] flex flex-col items-center">
+                                <div className="font-semibold text-blue-800 text-xl mb-1">Total Performance</div>
+                                <div className="text-xl font-bold text-blue-700 mb-1">{totalPerformance.toLocaleString()}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     {/* End restore */}
                   </>
