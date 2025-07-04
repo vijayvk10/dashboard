@@ -1147,19 +1147,34 @@ function App() {
                     </div>
                     {/* Restore chart and view data table section */}
                     <div className="mb-8">
-                      <div className="mb-4 flex flex-wrap gap-2">
-                        {tabNames.map((tab) => (
-                          <button
-                            key={tab}
-                            className={`px-4 py-2 rounded ${activeTab === tab ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} font-semibold`}
-                            onClick={() => {
-                              setActiveTab(tab);
-                              setShowBvATable(false);
-                            }}
-                          >
-                            {tab}
-                          </button>
-                        ))}
+                      <div className="mb-4 overflow-x-auto custom-scrollbar" style={{ whiteSpace: 'nowrap' }}>
+                        <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
+                          {tabNames.map((tab) => (
+                            <button
+                              key={tab}
+                              className={`px-6 py-3 rounded-lg text-lg ${activeTab === tab ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"} font-bold shadow-sm transition-all duration-150`}
+                              onClick={() => {
+                                setActiveTab(tab);
+                                setShowBvATable(false);
+                              }}
+                              style={{ whiteSpace: 'nowrap', minWidth: '160px' }}
+                            >
+                              {tab}
+                            </button>
+                          ))}
+                        </div>
+                        <style>{`
+                          .custom-scrollbar::-webkit-scrollbar {
+                            height: 6px;
+                          }
+                          .custom-scrollbar::-webkit-scrollbar-thumb {
+                            background: #b3c6e0;
+                            border-radius: 4px;
+                          }
+                          .custom-scrollbar::-webkit-scrollbar-track {
+                            background: #f0f4fa;
+                          }
+                        `}</style>
                       </div>
                       <h3 className="text-lg font-semibold mb-2">{activeTab} Visualization</h3>
                       <div className="bg-white rounded shadow p-2" style={{ width: "100%", minHeight: "320px" }}>
