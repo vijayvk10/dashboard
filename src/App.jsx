@@ -602,6 +602,16 @@ function App() {
       const ytdActCol = cols.find(col => /ytd.*act|act.*ytd/i.test(col));
       if (ytdActCol) {
         let filtered = tableData.filter(row => row[cols[0]] && row[ytdActCol]);
+        // Exclude 'north total' and 'grand total' (case-insensitive) from branch names
+        filtered = filtered.filter(row => {
+          const val = row[cols[0]];
+          if (!val || typeof val !== "string") return true;
+          const lower = val.toLowerCase();
+          return !(
+            lower.includes("north total") ||
+            lower.includes("grand total")
+          );
+        });
         let x = filtered.map(row => row[cols[0]]);
         let y = filtered.map(row => Number(row[ytdActCol]) || 0);
         const tableRows = x.map((branch, i) => ({
@@ -695,6 +705,16 @@ function App() {
       const ytdActCol = cols.find(col => /ytd.*act|act.*ytd/i.test(col));
       if (ytdActCol) {
         let filtered = tableData.filter(row => row[cols[0]] && row[ytdActCol]);
+        // Exclude 'north total' and 'grand total' (case-insensitive) from product names
+        filtered = filtered.filter(row => {
+          const val = row[cols[0]];
+          if (!val || typeof val !== "string") return true;
+          const lower = val.toLowerCase();
+          return !(
+            lower.includes("north total") ||
+            lower.includes("grand total")
+          );
+        });
         let x = filtered.map(row => row[cols[0]]);
         let y = filtered.map(row => Number(row[ytdActCol]) || 0);
         const tableRows = x.map((product, i) => ({
@@ -793,15 +813,16 @@ function App() {
       <div className="w-full min-h-screen min-w-screen flex flex-col md:flex-row bg-white rounded-none md:rounded-xl shadow-lg" style={{ minHeight: "100vh" }}>
         {/* Sidebar */}
         <aside
-          className="w-full md:w-64 bg-gradient-to-b from-blue-700 to-blue-500 text-white md:rounded-l-xl p-6 flex-shrink-0 md:mb-0 md:mr-6 shadow-lg"
+          className="w-full md:w-[23rem] bg-gradient-to-b from-blue-700 to-blue-500 text-white md:rounded-l-xl p-7 flex-shrink-0 md:mb-0 md:mr-10 shadow-lg"
           style={{
             position: "fixed",
             top: 0,
             left: 0,
-            width: "16rem",
+            width: "23rem",
             height: "100vh",
             zIndex: 20,
-            minHeight: "100vh"
+            minHeight: "100vh",
+            overflowY: "auto"
           }}
         >
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -809,131 +830,223 @@ function App() {
             Dashboard
           </h2>
           <div className="mb-6">
-            <label className="block text-sm font-semibold mb-2">Upload Excel File</label>
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={handleFileChange}
-              ref={fileInputRef}
-              className="block w-full text-sm text-blue-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white file:text-blue-700 hover:file:bg-blue-100"
-            />
+            <label className="block text-lg font-bold mb-2">Upload Excel File</label>
+            <div className="w-full bg-white border-2 border-dashed border-blue-400 rounded-lg p-4 flex flex-col items-center justify-center shadow-sm hover:border-blue-600 transition-all" style={{ minHeight: '110px' }}>
+              <input
+                type="file"
+                accept=".xlsx"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                className="block w-full text-base font-semibold text-blue-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-base file:font-semibold file:bg-white file:text-blue-700 hover:file:bg-blue-100 focus:outline-none py-2 px-3"
+                style={{ cursor: 'pointer', minHeight: '44px' }}
+              />
+              <span className="mt-2 text-xs text-gray-500">Drag & drop or click to select an Excel (.xlsx) file</span>
+            </div>
           </div>
           {sheetNames.length > 0 && (
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-1">Sheet</label>
-              <select
-                value={selectedSheet}
-                onChange={handleSheetSelect}
-                className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-              >
-                <option value="">Select Sheet</option>
-                {sheetNames.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-lg font-bold mb-2">Sheet</label>
+              <div className="relative w-full">
+                <select
+                  value={selectedSheet}
+                  onChange={handleSheetSelect}
+                  className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                  style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                >
+                  <option value="">Select Sheet</option>
+                  {sheetNames.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <style>{`
+                  select::-webkit-scrollbar {
+                    width: 8px;
+                  }
+                  select option {
+                    max-height: 160px;
+                    overflow-y: auto;
+                  }
+                `}</style>
+              </div>
             </div>
           )}
           {tableOptions.length > 0 && (
             <div className="mb-4">
-              <label className="block text-sm font-semibold mb-1">Table</label>
-              <select
-                value={selectedTable}
-                onChange={handleTableSelect}
-                className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-              >
-                <option value="">Select Table</option>
-                {tableOptions.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-lg font-bold mb-2">Table</label>
+              <div className="flex flex-col gap-2">
+                {tableOptions.map((t) => {
+                  let firstCol = t;
+                  if (rawTables[selectedSheet] && rawTables[selectedSheet][t]) {
+                    const tableData = rawTables[selectedSheet][t];
+                    if (tableData.length > 0) {
+                      const cols = Object.keys(tableData[0]);
+                      if (cols.length > 0) firstCol = cols[0];
+                    }
+                  }
+                  return (
+                    <label key={t} className="flex items-center gap-2 cursor-pointer text-base font-semibold">
+                      <input
+                        type="radio"
+                        name="table"
+                        value={t}
+                        checked={selectedTable === t}
+                        onChange={handleTableSelect}
+                        className="form-radio text-blue-600 focus:ring-blue-500 scale-125"
+                        style={{ marginRight: '8px' }}
+                      />
+                      <span className="truncate" title={t}>{firstCol}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
           {selectedTable && (
-            <div className="mb-4 space-y-2">
-              <label className="block text-sm font-semibold">Month</label>
-              <select
-                name="month"
-                value={filters.month}
-                onChange={handleFilterChange}
-                className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-              >
-                {filterOptions.months.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <label className="block text-sm font-semibold">Year</label>
-              <select
-                name="year"
-                value={filters.year}
-                onChange={handleFilterChange}
-                className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-              >
-                {filterOptions.years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+            <div className="mb-4 space-y-3">
+              <label className="block text-lg font-bold">Month</label>
+              <div className="relative w-full">
+                <select
+                  name="month"
+                  value={filters.month}
+                  onChange={handleFilterChange}
+                  className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                  style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                >
+                  {filterOptions.months.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <style>{`
+                  select::-webkit-scrollbar {
+                    width: 8px;
+                  }
+                  select option {
+                    max-height: 160px;
+                    overflow-y: auto;
+                  }
+                `}</style>
+              </div>
+              <label className="block text-lg font-bold">Year</label>
+              <div className="relative w-full">
+                <select
+                  name="year"
+                  value={filters.year}
+                  onChange={handleFilterChange}
+                  className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                  style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                >
+                  {filterOptions.years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <style>{`
+                  select::-webkit-scrollbar {
+                    width: 8px;
+                  }
+                  select option {
+                    max-height: 160px;
+                    overflow-y: auto;
+                  }
+                `}</style>
+              </div>
               {filterOptions.branches.length > 1 && (
                 <>
-                  <label className="block text-sm font-semibold">Branch</label>
-                  <select
-                    name="branch"
-                    value={filters.branch}
-                    onChange={handleFilterChange}
-                    className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-                  >
-                    {filterOptions.branches.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-lg font-bold">Branch</label>
+                  <div className="relative w-full">
+                    <select
+                      name="branch"
+                      value={filters.branch}
+                      onChange={handleFilterChange}
+                      className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                      style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                    >
+                      {filterOptions.branches.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                    <style>{`
+                      select::-webkit-scrollbar {
+                        width: 8px;
+                      }
+                      select option {
+                        max-height: 160px;
+                        overflow-y: auto;
+                      }
+                    `}</style>
+                  </div>
                 </>
               )}
               {filterOptions.products.length > 1 && (
                 <>
-                  <label className="block text-sm font-semibold">Product</label>
-                  <select
-                    name="product"
-                    value={filters.product}
-                    onChange={handleFilterChange}
-                    className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-                  >
-                    {filterOptions.products.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-lg font-bold">Product</label>
+                  <div className="relative w-full">
+                    <select
+                      name="product"
+                      value={filters.product}
+                      onChange={handleFilterChange}
+                      className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                      style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                    >
+                      {filterOptions.products.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <style>{`
+                      select::-webkit-scrollbar {
+                        width: 8px;
+                      }
+                      select option {
+                        max-height: 160px;
+                        overflow-y: auto;
+                      }
+                    `}</style>
+                  </div>
                 </>
               )}
-              <label className="block text-sm font-semibold mt-2">Visualization</label>
-              <select
-                value={visualType}
-                onChange={handleVisualTypeChange}
-                className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300"
-              >
-                <option>Bar Chart</option>
-                <option>Pie Chart</option>
-                <option>Line Chart</option>
-              </select>
+              <hr className="my-3 border-blue-200" />
+              <label className="block text-lg font-bold mt-2">Visualization</label>
+              <div className="relative w-full">
+                <select
+                  value={visualType}
+                  onChange={handleVisualTypeChange}
+                  className="w-full rounded border-gray-300 text-blue-900 focus:ring-blue-300 focus:border-blue-300 bg-white text-base font-semibold py-2 px-3"
+                  style={{ minHeight: '44px', maxHeight: '44px', overflowY: 'auto' }}
+                >
+                  <option>Bar Chart</option>
+                  <option>Pie Chart</option>
+                  <option>Line Chart</option>
+                </select>
+                <style>{`
+                  select::-webkit-scrollbar {
+                    width: 8px;
+                  }
+                  select option {
+                    max-height: 160px;
+                    overflow-y: auto;
+                  }
+                `}</style>
+              </div>
             </div>
           )}
         </aside>
         {/* Main Content */}
-        <div className="flex-1 min-h-screen bg-white" style={{ marginLeft: "16rem", minHeight: "100vh", height: "100vh", overflowY: "auto" }}>
+        <div className="flex-1 min-h-screen bg-white" style={{ marginLeft: "23rem", minHeight: "100vh", height: "100vh", overflowY: "auto" }}>
           <div className="p-2 md:p-6" style={{ minHeight: "100vh" }}>
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2 md:hidden">
-              <span role="img" aria-label="chart">📊</span>
-              Excel Dashboard - Data Table & Visualizations
-            </h2>
+            {/* Heading above data table, always visible */}
+            <div className="mb-6 flex items-center gap-2">
+              <span role="img" aria-label="chart" className="text-2xl">📊</span>
+              <span className="text-2xl font-bold">Excel Dashboard - Data Table & Visualizations</span>
+            </div>
             {loading && (
               <div className="flex items-center gap-2 text-blue-600 font-medium mb-4">
                 <svg className="animate-spin h-5 w-5 text-blue-600" viewBox="0 0 24 24">
@@ -986,49 +1099,51 @@ function App() {
                   <>
                     <div className="mb-8">
                       <h3 className="text-lg font-semibold mb-2">Data Table</h3>
-                      <div style={{ position: "relative" }}>
-                        <div
-                          className="overflow-x-auto rounded border border-gray-200 bg-gray-50"
-                          style={{
-                            maxHeight: "400px",
-                            minHeight: "200px",
-                            overflowY: "auto",
-                            width: "100%",
-                            height: "400px"
-                          }}
-                        >
-                          <table className="min-w-full text-sm text-gray-800" style={{ minWidth: "700px" }}>
-                            <thead className="bg-blue-100 sticky top-0 z-10">
-                              <tr>
+                    <div>
+                      <div
+                        className="overflow-x-auto rounded border border-gray-200 bg-gray-50"
+                        style={{
+                          maxHeight: "400px",
+                          minHeight: "200px",
+                          overflowY: "auto",
+                          width: "100%",
+                          height: "400px"
+                        }}
+                      >
+                        <table className="min-w-full text-sm text-gray-800" style={{ minWidth: "700px" }}>
+                          <thead className="bg-blue-100 sticky top-0 z-10">
+                            <tr>
+                              {columns.map((col) => (
+                                <th key={col} className="px-3 py-2 font-semibold text-left">
+                                  {col}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dataTable.map((row, idx) => (
+                              <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
                                 {columns.map((col) => (
-                                  <th key={col} className="px-3 py-2 font-semibold text-left">
-                                    {col}
-                                  </th>
+                                  <td key={col} className="px-3 py-2">
+                                    {typeof row[col] === "number" && !Number.isInteger(row[col])
+                                      ? row[col].toFixed(2)
+                                      : row[col]}
+                                  </td>
                                 ))}
                               </tr>
-                            </thead>
-                            <tbody>
-                              {dataTable.map((row, idx) => (
-                                <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                                  {columns.map((col) => (
-                                    <td key={col} className="px-3 py-2">
-                                      {row[col]}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <button
-                          onClick={handleDownloadCSV}
-                          disabled={!csvData}
-                          className="mt-3 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
-                          style={{ width: "auto", minWidth: "0", position: "absolute", right: 0, top: 0 }}
-                        >
-                          ⬇️ Download CSV
-                        </button>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
+                      <button
+                        onClick={handleDownloadCSV}
+                        disabled={!csvData}
+                        className="mt-3 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold"
+                        style={{ width: "auto", minWidth: "0" }}
+                      >
+                        ⬇️ Download CSV
+                      </button>
+                    </div>
                     </div>
                     {/* Restore chart and view data table section */}
                     <div className="mb-8">
@@ -1069,30 +1184,37 @@ function App() {
                           {showBvATable ? "Hide" : "📊 View Data Table"}
                         </button>
                         {showBvATable && (
-                          <div className="mt-2 overflow-x-auto border rounded bg-gray-50" style={{ maxHeight: "300px", minHeight: "120px", overflowY: "auto", height: "300px" }}>
-                            <table className="min-w-full text-sm text-gray-800">
-                              <thead className="bg-blue-100 sticky top-0 z-10">
-                                <tr>
+                          <>
+                          <div className="mt-2">
+                            <div className="overflow-x-auto border rounded bg-gray-50" style={{ maxHeight: "300px", minHeight: "120px", overflowY: "auto", height: "300px" }}>
+                              <table className="min-w-full text-sm text-gray-800">
+                                <thead className="bg-blue-100 sticky top-0 z-10">
+                                  <tr>
+                                    {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
+                                      getTabChartData(activeTab, dataTable, columns, filters, visualType).table.length > 0 &&
+                                      Object.keys(getTabChartData(activeTab, dataTable, columns, filters, visualType).table[0]).map((col) => (
+                                        <th key={col} className="px-3 py-2 font-semibold text-left">{col}</th>
+                                      ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
                                   {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
-                                    getTabChartData(activeTab, dataTable, columns, filters, visualType).table.length > 0 &&
-                                    Object.keys(getTabChartData(activeTab, dataTable, columns, filters, visualType).table[0]).map((col) => (
-                                      <th key={col} className="px-3 py-2 font-semibold text-left">{col}</th>
-                                    ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {getTabChartData(activeTab, dataTable, columns, filters, visualType).table &&
-                                  getTabChartData(activeTab, dataTable, columns, filters, visualType).table.map(
-                                    (row, idx) => (
-                                      <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
-                                        {Object.keys(row).map((col) => (
-                                          <td key={col} className="px-3 py-2">{row[col]}</td>
-                                        ))}
-                                      </tr>
-                                    )
-                                  )}
-                              </tbody>
-                            </table>
+                                    getTabChartData(activeTab, dataTable, columns, filters, visualType).table.map(
+                                      (row, idx) => (
+                                        <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-100"}>
+                                          {Object.keys(row).map((col) => (
+                                            <td key={col} className="px-3 py-2">
+                                              {typeof row[col] === "number" && !Number.isInteger(row[col])
+                                                ? row[col].toFixed(2)
+                                                : row[col]}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      )
+                                    )}
+                                </tbody>
+                              </table>
+                            </div>
                             <button
                               onClick={() => {
                                 // Download the currently shown tab table as CSV
@@ -1113,6 +1235,7 @@ function App() {
                               ⬇️ Download CSV
                             </button>
                           </div>
+                          </>
                         )}
                       </div>
                     </div>
